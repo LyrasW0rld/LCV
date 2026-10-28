@@ -1,0 +1,80 @@
+--- start_local.bat
++++ start_local.bat
+@@ -2,6 +2,15 @@
+ @echo off
+ setlocal enabledelayedexpansion
+ 
++:: Parse command-line flags
++if "%~1"=="--dry-run" (
++    set "LCV_DRY_RUN=1"
++    set "LCV_TEST_MODE=1"
++)
++if "%~1"=="--test" (
++    set "LCV_TEST_MODE=1"
++)
++
+ :: ======================================================================
+ :: LCV (Lyra's Code Visualizer) — Automated Local Development Launcher
+ :: ======================================================================
+@@ -18,10 +27,10 @@
+ where node >nul 2>&1
+ if %errorlevel% neq 0 (
+     echo.
+-    echo [ERROR] Node.js was not found in your system PATH!
+-    echo Please install Node.js (v18.x - v22.x recommended) from https://nodejs.org/
++    echo [ERROR] Node.js was not found in your system PATH.
++    echo Please install Node.js ^(v18.x - v22.x recommended^) from https://nodejs.org/
+     echo.
+-    pause
++    if not "!LCV_TEST_MODE!"=="1" pause
+     exit /b 1
+ )
+ 
+@@ -29,10 +38,10 @@
+ where npm >nul 2>&1
+ if %errorlevel% neq 0 (
+     echo.
+-    echo [ERROR] npm was not found in your system PATH!
++    echo [ERROR] npm was not found in your system PATH.
+     echo Please ensure npm is installed and added to your system PATH.
+     echo.
+-    pause
++    if not "!LCV_TEST_MODE!"=="1" pause
+     exit /b 1
+ )
+ 
+@@ -50,11 +59,11 @@
+ call npm install
+ if %errorlevel% neq 0 (
+     echo.
+-    echo [ERROR] Dependency installation failed with exit code %errorlevel%!
++    echo [ERROR] Dependency installation failed with exit code !errorlevel!.
+     echo Please review the npm error messages above.
+     echo.
+-    pause
+-    exit /b %errorlevel%
++    if not "!LCV_TEST_MODE!"=="1" pause
++    exit /b !errorlevel!
+ )
+ echo [LCV] Dependencies successfully installed and verified.
+ echo.
+@@ -74,12 +83,17 @@
+ echo  Press Ctrl+C in this console window to stop the server anytime.
+ echo.
+ 
++if "!LCV_DRY_RUN!"=="1" (
++    echo [LCV] Dry run verification successful.
++    exit /b 0
++)
++
+ call npm run dev
+ if %errorlevel% neq 0 (
+     echo.
+-    echo [ERROR] Vite development server stopped with error code %errorlevel%.
++    echo [ERROR] Vite development server stopped with error code !errorlevel!.
+     echo.
+-    pause
+-    exit /b %errorlevel%
++    if not "!LCV_TEST_MODE!"=="1" pause
++    exit /b !errorlevel!
+ )

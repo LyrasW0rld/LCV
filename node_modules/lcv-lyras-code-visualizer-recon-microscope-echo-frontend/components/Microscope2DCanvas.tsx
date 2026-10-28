@@ -7,6 +7,8 @@ import {
   NodeCustomization,
   NodeKind,
   ProjectRepository,
+  Render3DStyle,
+  get3DStyleLabel,
 } from '../types';
 import { NodeSearchBox } from './NodeSearchBox';
 import {
@@ -21,6 +23,7 @@ import {
   Download,
   Upload,
   Expand,
+  Box,
 } from 'lucide-react';
 
 interface Microscope2DCanvasProps {
@@ -34,6 +37,8 @@ interface Microscope2DCanvasProps {
   nodeOffsets: Record<string, { x: number; y: number }>;
   nodeCustomizations: Record<string, NodeCustomization>;
   commentBoxes: CommentBox[];
+  onToggle2D3D?: () => void;
+  active3DStyle?: Render3DStyle;
   onChangePanZoom: (pan: { x: number; y: number }, zoom: number) => void;
   onChangeNodeOffsets: (offsets: Record<string, { x: number; y: number }>) => void;
   onChangeNodeCustomizations: (customs: Record<string, NodeCustomization>) => void;
@@ -280,6 +285,8 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
   nodeOffsets,
   nodeCustomizations,
   commentBoxes,
+  onToggle2D3D,
+  active3DStyle,
   onChangePanZoom,
   onChangeNodeOffsets,
   onChangeNodeCustomizations,
@@ -417,15 +424,26 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
     const outPinsByNode = new Map<string, PinSocket[]>();
 
     filteredEdges.forEach((edge) => {
+      const targetNode = repository.allNodes.find((n) => n.id === edge.targetId);
+      const isReturnTarget = targetNode?.kind === NodeKind.RETURN;
+      const returnExpr = targetNode?.returnExpression;
+
       const inList = inPinsByNode.get(edge.targetId) || [];
       inList.push({
         edgeId: edge.id,
         edge,
-        label: `in l${edge.callLine}`,
+        label: isReturnTarget
+          ? (returnExpr ? `${returnExpr} l${edge.callLine}` : `void l${edge.callLine}`)
+          : `in l${edge.callLine}`,
         pinType: 'IN',
         line: edge.callLine,
       });
       inPinsByNode.set(edge.targetId, inList);
+
+      const sourceNode = repository.allNodes.find((n) => n.id === edge.sourceId);
+      if (sourceNode?.kind === NodeKind.RETURN) {
+        return;
+      }
 
       const outList = outPinsByNode.get(edge.sourceId) || [];
       const isTrue = edge.branchOutcome === 'TRUE';
@@ -456,18 +474,30 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
       outPinsByNode.set(nodeId, list);
     });
 
-    const computeNodeHeight = (nodeId: string, baseLine: number) => {
+    const computeNodeHeight = (nodeId: string, baseLine: number, isReturn = false) => {
       const ins = inPinsByNode.get(nodeId) || [];
       const outs = outPinsByNode.get(nodeId) || [];
       if (ins.length === 0) {
-        ins.push({ edgeId: `default_in_${nodeId}`, label: `in l${baseLine}`, pinType: 'IN', line: baseLine });
+        const targetNode = repository.allNodes.find((n) => n.id === nodeId);
+        const expr = targetNode?.returnExpression;
+        ins.push({
+          edgeId: `default_in_${nodeId}`,
+          label: isReturn
+            ? (expr ? `${expr} l${baseLine}` : `void l${baseLine}`)
+            : `in l${baseLine}`,
+          pinType: 'IN',
+          line: baseLine,
+        });
         inPinsByNode.set(nodeId, ins);
       }
-      if (outs.length === 0) {
+      if (outs.length === 0 && !isReturn) {
         outs.push({ edgeId: `default_out_${nodeId}`, label: `out l${baseLine}`, pinType: 'OUT', line: baseLine });
         outPinsByNode.set(nodeId, outs);
       }
-      const maxPins = Math.max(ins.length, outs.length, 1);
+      if (isReturn) {
+        outPinsByNode.set(nodeId, []);
+      }
+      const maxPins = Math.max(ins.length, isReturn ? 0 : outs.length, 1);
       return HEADER_HEIGHT + PIN_TOP_PAD + maxPins * PIN_ROW_HEIGHT + 8;
     };
 
@@ -497,7 +527,7 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
       });
     } else {
       const BOX_COLS = filterFileId ? 1 : 2;
-      const BOX_WIDTH = 980;
+      const BOX_WIDTH = 1240;
       const BOX_GAP_X = 105;
       const BOX_GAP_Y = 85;
 
@@ -523,7 +553,15 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
 
         let fnCursorY = boxY + 58;
         functions.forEach((fn) => {
-          const fnBranches = file.nodes.filter((b) => b.parentId === fn.id);
+          const fnBranches = file.nodes.filter(
+            (b) =>
+              (b.kind === NodeKind.CONDITION || b.kind === NodeKind.LOOP) &&
+              b.lineStart >= fn.lineStart &&
+              b.lineEnd <= fn.lineEnd
+          );
+          const fnDirectReturns = file.nodes.filter(
+            (r) => r.kind === NodeKind.RETURN && r.parentId === fn.id
+          );
           const fnHeight = computeNodeHeight(fn.id, fn.lineStart);
 
           map.set(fn.id, {
@@ -552,7 +590,47 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
               outPins: outPinsByNode.get(br.id) || [],
               hasSelfLoop: br.kind === NodeKind.LOOP || Boolean(br.isRecursive),
             });
-            branchCursorY += brHeight + 22;
+
+            // Position child return nodes for this branch in Column 3 (x: boxX + 940)
+            const branchReturns = file.nodes.filter(
+              (r) => r.kind === NodeKind.RETURN && r.parentId === br.id
+            );
+            let childReturnCursorY = branchCursorY;
+            branchReturns.forEach((retNode) => {
+              const retHeight = computeNodeHeight(retNode.id, retNode.lineStart, true);
+              map.set(retNode.id, {
+                node: retNode,
+                displayLabel: 'return',
+                x: boxX + 940,
+                y: childReturnCursorY,
+                width: 250,
+                height: retHeight,
+                inPins: inPinsByNode.get(retNode.id) || [],
+                outPins: [],
+                hasSelfLoop: false,
+              });
+              childReturnCursorY += retHeight + 16;
+            });
+
+            const branchUsedHeight = Math.max(brHeight + 22, childReturnCursorY - branchCursorY + 6);
+            branchCursorY += branchUsedHeight;
+          });
+
+          // Position direct return nodes of function fn at Column 2 (x: boxX + 610) below branches
+          fnDirectReturns.forEach((retNode) => {
+            const retHeight = computeNodeHeight(retNode.id, retNode.lineStart, true);
+            map.set(retNode.id, {
+              node: retNode,
+              displayLabel: 'return',
+              x: boxX + 610,
+              y: branchCursorY,
+              width: 250,
+              height: retHeight,
+              inPins: inPinsByNode.get(retNode.id) || [],
+              outPins: [],
+              hasSelfLoop: false,
+            });
+            branchCursorY += retHeight + 22;
           });
 
           fnCursorY += Math.max(fnHeight + 28, branchCursorY - fnCursorY + 18);
@@ -1192,26 +1270,44 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
         backgroundPosition: `${pan.x}px ${pan.y}px`,
       }}
     >
-      {/* Top-Left Legend */}
-      <div className="pointer-events-none absolute top-3 left-3 z-20 flex flex-wrap items-center gap-4 bg-[#0D0D12]/95 border border-zinc-800 px-3 py-1.5 rounded text-xs font-sans">
-        <span className="flex items-center gap-1.5 text-[#F7D794] font-semibold">
-          <span className="w-2.5 h-2.5 rounded-xs bg-[#E5A93C] inline-block" />
-          Line-Numbered Pins (in lXX / out lXX)
-        </span>
-        <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-          <span className="w-2.5 h-2.5 rounded-xs bg-[#22C55E] inline-block" />
-          True lXX Pin (Green)
-        </span>
-        <span className="flex items-center gap-1.5 text-red-400 font-semibold">
-          <span className="w-2.5 h-2.5 rounded-xs bg-[#EF4444] inline-block" />
-          False lXX Pin (Red)
-        </span>
-        <span className="flex items-center gap-1.5 text-sky-300 font-semibold">
-          <span className="px-1.5 py-0.2 bg-[#0284C7] border border-sky-300 text-white font-mono text-[9.5px] font-bold">
-            LOOP
+      {/* Top-Left View Switcher & Legend */}
+      <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-2">
+        {onToggle2D3D && (
+          <button
+            type="button"
+            onClick={onToggle2D3D}
+            className="px-3 py-1.5 rounded bg-[#231B0E] hover:bg-[#2F2412] border border-[#E5A93C]/80 text-[#F7D794] font-sans text-xs font-semibold flex items-center gap-1.5 transition shadow-xl"
+            title={`Switch directly to 3D View (${get3DStyleLabel(active3DStyle)})`}
+          >
+            <Box className="w-3.5 h-3.5 text-[#E5A93C]" />
+            <span>Switch to 3D ({get3DStyleLabel(active3DStyle)})</span>
+          </button>
+        )}
+
+        <div className="pointer-events-none flex flex-wrap items-center gap-4 bg-[#0D0D12]/95 border border-zinc-800 px-3 py-1.5 rounded text-xs font-sans">
+          <span className="flex items-center gap-1.5 text-[#F7D794] font-semibold">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#E5A93C] inline-block" />
+            Line-Numbered Pins (in lXX / out lXX)
           </span>
-          Blue Loop Square
-        </span>
+          <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#22C55E] inline-block" />
+            True lXX Pin (Green)
+          </span>
+          <span className="flex items-center gap-1.5 text-red-400 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#EF4444] inline-block" />
+            False lXX Pin (Red)
+          </span>
+          <span className="flex items-center gap-1.5 text-rose-400 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-xs bg-[#F43F5E] inline-block" />
+            Return Node (Pink / Rose)
+          </span>
+          <span className="flex items-center gap-1.5 text-sky-300 font-semibold">
+            <span className="px-1.5 py-0.2 bg-[#0284C7] border border-sky-300 text-white font-mono text-[9.5px] font-bold">
+              LOOP
+            </span>
+            Blue Loop Square
+          </span>
+        </div>
       </div>
 
       {/* Right-Click Context Menu */}
@@ -1568,6 +1664,9 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
               } else if (hasSelfLoop) {
                 headerBg = 'bg-[#0F2238] text-sky-200 font-semibold border-b border-sky-500/60';
                 borderClass = 'border-sky-500/80';
+              } else if (node.kind === NodeKind.RETURN) {
+                headerBg = 'bg-[#351424] text-rose-200 font-semibold border-b border-rose-500/60';
+                borderClass = 'border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.22)]';
               } else if (node.kind === NodeKind.FUNCTION) {
                 headerBg =
                   'bg-[#191920] text-[#F3C66F] font-semibold border-b border-[#E5A93C]/40';
@@ -1595,10 +1694,14 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
                   }}
                   style={{ left: x, top: y, width, height }}
                   className={`absolute bg-[#0C0C11] border ${borderClass} flex flex-col cursor-move select-none shadow-lg ${
-                    isSelected || isHovered ? 'ring-2 ring-[#E5A93C] z-30' : 'z-20'
+                    isSelected || isHovered
+                      ? node.kind === NodeKind.RETURN
+                        ? 'ring-2 ring-rose-400 z-30'
+                        : 'ring-2 ring-[#E5A93C] z-30'
+                      : 'z-20'
                   }`}
                 >
-                  {/* Node Header (24px) with Blue Square [LOOP] badge when self-looping */}
+                  {/* Node Header (24px) with Blue Square [LOOP] badge when self-looping or [RET] for return nodes */}
                   <div
                     className={`h-[24px] shrink-0 px-2 text-[11px] font-mono flex items-center justify-between gap-1 truncate ${headerBg}`}
                   >
@@ -1606,6 +1709,11 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
                       {hasSelfLoop && (
                         <span className="px-1.5 py-0.2 bg-[#0284C7] border border-sky-200 text-white font-mono text-[9px] font-bold shrink-0">
                           LOOP
+                        </span>
+                      )}
+                      {node.kind === NodeKind.RETURN && (
+                        <span className="px-1.5 py-0.2 bg-rose-950/90 border border-rose-400 text-rose-300 font-mono text-[9px] font-bold shrink-0">
+                          RET
                         </span>
                       )}
                       {editingNodeId === node.id ? (
@@ -1622,7 +1730,7 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
                           className="bg-black text-[#F7D794] px-1 w-full text-[11px] font-mono focus:outline-none"
                         />
                       ) : (
-                        <span className="truncate" title="Double-click to rename node">
+                        <span className="truncate" title={node.kind === NodeKind.RETURN ? 'Return Statement' : 'Double-click to rename node'}>
                           {displayLabel}
                         </span>
                       )}
@@ -1648,7 +1756,7 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
                               onMouseEnter={(e) => {
                                 e.stopPropagation();
                                 if (inPin.edge) {
-                                  setHoveredEdgeId(inPin.edgeId);
+                                   setHoveredEdgeId(inPin.edgeId);
                                   onHoverEdge(inPin.edge);
                                 }
                               }}
@@ -1658,14 +1766,14 @@ export const Microscope2DCanvas: React.FC<Microscope2DCanvasProps> = ({
                               }}
                               className="flex items-center gap-1.5 text-zinc-300 hover:text-white cursor-pointer"
                             >
-                              <span className="w-2 h-2 bg-[#E5A93C] inline-block shrink-0" />
+                              <span className={`w-2 h-2 inline-block shrink-0 ${node.kind === NodeKind.RETURN ? 'bg-[#F43F5E]' : 'bg-[#E5A93C]'}`} />
                               <span>{inPin.label}</span>
                             </span>
                           ) : (
                             <span />
                           )}
 
-                          {outPin ? (
+                          {outPin && node.kind !== NodeKind.RETURN ? (
                             <span
                               onMouseEnter={(e) => {
                                 e.stopPropagation();

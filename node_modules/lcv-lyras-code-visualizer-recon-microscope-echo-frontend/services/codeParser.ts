@@ -129,6 +129,9 @@ function buildHumanExplanation(
       ? `FALSE (Red) conditional sub-branch "${label}" in ${className}. Sprouts sub-function call twigs when the preceding condition is false.`
       : `TRUE (Green) conditional sub-branch "${label}" in ${className}. Sprouts sub-function call twigs when the condition evaluates to true.`;
   }
+  if (kind === NodeKind.RETURN) {
+    return `Return statement "${label}" in ${className} (${fileName}). Terminates execution of the enclosing routine and returns the computed result.`;
+  }
   return `Sub-function call / execution twig "${label}" in ${fileName}. Invokes downstream routines or mutates state.`;
 }
 
@@ -156,13 +159,29 @@ function extractFullFunctionBlock(lines: string[], startLineIdx: number, lang: S
   let endIdx = startLineIdx;
 
   for (let i = startLineIdx; i < lines.length && i < startLineIdx + 120; i++) {
-    const line = lines[i];
-    for (let c = 0; c < line.length; c++) {
-      if (line[c] === '{') {
+    const rawLine = lines[i];
+    // Strip strings and comments so braces inside them do not alter braceDepth
+    const sanitized = rawLine
+      .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+      .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+      .replace(/\/\/.*$/, '')
+      .replace(/#.*$/, '');
+
+    for (let c = 0; c < sanitized.length; c++) {
+      if (sanitized[c] === '}') {
+        if (foundOpenBrace) {
+          braceDepth--;
+          if (braceDepth <= 0) {
+            endIdx = i + 1;
+            return {
+              snippet: lines.slice(startLineIdx, endIdx).join('\n'),
+              endLine: endIdx,
+            };
+          }
+        }
+      } else if (sanitized[c] === '{') {
         braceDepth++;
         foundOpenBrace = true;
-      } else if (line[c] === '}') {
-        braceDepth--;
       }
     }
     endIdx = i + 1;
@@ -283,7 +302,7 @@ export function parseSourceFileToNodes(
   let currentConditionOrLoop: CodeNode | null = null;
 
   const fnRegex =
-    /(?:(?:public|private|protected|static|virtual|inline|async|unsafe|extern|pub|fn|def|function)\s+)+([a-zA-Z_][a-zA-Z0-9_<>:]*)\s*\(([^)]*)\)|^\s*(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>|^\s*(?:void|int|float|double|bool|string|char|auto|Node|SimpleNode\s*\*|Transform|GameObject|size_t)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/;
+    /^\s*(?:(?:export|default|public|private|protected|internal|pub(?:\([^)]+\))?|static|virtual|inline|async|unsafe|extern|final|override|constexpr|explicit|friend|const|template\s*<[^>]*>)\s+)*(?:(?:def|fn|function|func)\s+|(?:(?:const\s+)?(?:(?:unsigned|signed|long|short)\s+)*(?:\b(?:void|int|float|double|bool|boolean|string|char|auto|size_t|int8_t|int16_t|int32_t|int64_t|uint8_t|uint16_t|uint32_t|uint64_t|uint\d+_t|int\d+_t|intptr_t|uintptr_t|ptrdiff_t|ssize_t|wchar_t|char16_t|char32_t|byte|unsigned|signed|long|short)\b|(?:(?:struct|class|typename)\s+)?(?:(?:[a-zA-Z_][a-zA-Z0-9_]*::)+[a-zA-Z_][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]*|[a-zA-Z0-9_]+_t|[a-zA-Z_][a-zA-Z0-9_]*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)))(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?(?:\s*(?:\*+|&{1,2}|\[\]|\bconst\b))*\s+))((?:[a-zA-Z_][a-zA-Z0-9_]*::)*[a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)|^\s*(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/;
   const controlRegex = /^\s*(?:}\s*)?(if|else\s+if|else|for|while|switch|match)\b(.*)$/;
   const subCallStmtRegex = /^\s*([a-zA-Z_][a-zA-Z0-9_.:]*\s*\([^;{}]*\))\s*;?\s*$/;
 
@@ -296,8 +315,8 @@ export function parseSourceFileToNodes(
 
     // Level 1: Function definition
     const fnMatch = trimmed.match(fnRegex);
-    if (fnMatch && !trimmed.startsWith('if') && !trimmed.startsWith('for') && !trimmed.startsWith('while') && !trimmed.startsWith('else')) {
-      const rawFnName = fnMatch[1] || fnMatch[3] || fnMatch[4] || `fn_${i + 1}`;
+    if (fnMatch && !trimmed.startsWith('if') && !trimmed.startsWith('for') && !trimmed.startsWith('while') && !trimmed.startsWith('else') && !trimmed.startsWith('return')) {
+      const rawFnName = fnMatch[1] || fnMatch[3] || `fn_${i + 1}`;
       const cleanFnName = rawFnName.split('::').pop() || rawFnName;
 
       const { snippet, endLine } = extractFullFunctionBlock(lines, i, lang);
@@ -398,6 +417,62 @@ export function parseSourceFileToNodes(
       continue;
     }
 
+    // Level 3a: Dedicated Return Node for every return statement (Requirement R2)
+    const strippedLine = trimmed.replace(/\/\/.*$/, '').replace(/#.*$/, '').trim();
+    const returnMatch = strippedLine.match(/^\s*(?:}\s*)?(?:else\s+)?\breturn\b(?:\s+(.*?))?\s*;?\s*$/);
+
+    if (returnMatch && currentFunction && nodes.length < 120) {
+      const rawExpr = (returnMatch[1] || '').trim();
+      const cleanExpr = rawExpr.replace(/;+$/, '').trim();
+
+      // Resolve parent: deepest active enclosing branch (CONDITION or LOOP), otherwise function root
+      let parentBranch: CodeNode = currentFunction;
+      for (let nIdx = nodes.length - 1; nIdx >= 0; nIdx--) {
+        const candidate = nodes[nIdx];
+        if (
+          (candidate.kind === NodeKind.CONDITION || candidate.kind === NodeKind.LOOP) &&
+          candidate.lineStart <= i + 1 &&
+          i + 1 <= candidate.lineEnd
+        ) {
+          parentBranch = candidate;
+          break;
+        }
+      }
+
+      const returnNode: CodeNode = {
+        id: `${fileId}_return_${i + 1}`,
+        symbolName: cleanExpr ? `return ${cleanExpr}` : 'return',
+        label: 'return',
+        kind: NodeKind.RETURN,
+        fileId,
+        fileName,
+        className: detectedClassName,
+        language: lang,
+        lineStart: i + 1,
+        lineEnd: i + 1,
+        codeSnippet: lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 2)).join('\n'),
+        explanation: buildHumanExplanation(
+          NodeKind.RETURN,
+          cleanExpr ? `return ${cleanExpr}` : 'return',
+          detectedClassName,
+          fileName,
+          false
+        ),
+        parentId: parentBranch.id,
+        childrenIds: [],
+        callsIds: [],
+        calledByIds: [],
+        complexity: 1,
+        memoryBytes: 32,
+        color: '#F43F5E', // Pink/Rose
+        returnExpression: cleanExpr,
+      };
+
+      parentBranch.childrenIds.push(returnNode.id);
+      nodes.push(returnNode);
+      continue;
+    }
+
     // Level 3: Sub-Function Call Statements inside a True/False branch or function
     const callMatch = trimmed.match(subCallStmtRegex);
     if (
@@ -411,10 +486,18 @@ export function parseSourceFileToNodes(
     ) {
       const rawCall = callMatch[1].trim();
       const fnCalledName = rawCall.split('(')[0].split('.').pop()?.trim() || rawCall;
-      const parentBranch =
-        currentConditionOrLoop && i + 1 <= currentConditionOrLoop.lineEnd
-          ? currentConditionOrLoop
-          : currentFunction;
+      let parentBranch: CodeNode = currentFunction;
+      for (let nIdx = nodes.length - 1; nIdx >= 0; nIdx--) {
+        const candidate = nodes[nIdx];
+        if (
+          (candidate.kind === NodeKind.CONDITION || candidate.kind === NodeKind.LOOP) &&
+          candidate.lineStart <= i + 1 &&
+          i + 1 <= candidate.lineEnd
+        ) {
+          parentBranch = candidate;
+          break;
+        }
+      }
 
       const isParentFalse = parentBranch.label.toLowerCase().startsWith('else');
       const stmtNode: CodeNode = {
@@ -555,11 +638,14 @@ export function buildRepositoryFromRawFiles(
 
   functionNodes.forEach((fnNode) => {
     const childBranches = allNodes.filter(
-      (b) => b.parentId === fnNode.id && (b.kind === NodeKind.CONDITION || b.kind === NodeKind.LOOP)
+      (b) =>
+        b.fileId === fnNode.fileId &&
+        (b.kind === NodeKind.CONDITION || b.kind === NodeKind.LOOP) &&
+        b.lineStart >= fnNode.lineStart &&
+        b.lineEnd <= fnNode.lineEnd
     );
 
     symbolMap.forEach((targetNode, symbolName) => {
-      if (fnNode.id === targetNode.id) return;
       if (targetNode.kind === NodeKind.CLASS) return;
 
       let matchedInChildBranch = false;
@@ -600,7 +686,7 @@ export function buildRepositoryFromRawFiles(
         });
       });
 
-      if (!matchedInChildBranch) {
+      if (!matchedInChildBranch && fnNode.id !== targetNode.id) {
         const directOccurrences = findCallOccurrencesWithLineAndOutcome(
           fnNode.codeSnippet,
           fnNode.lineStart,

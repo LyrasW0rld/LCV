@@ -1,51 +1,47 @@
 # Original User Request
 
-## Initial Request — 2026-10-28T15:22:00Z
+## Initial Request — 2026-10-28T18:45:17Z
 
-Anpassung des Projekts für den produktiven Einsatz als kostenlose statische HTML5-Webseite auf GitHub Pages ohne Backbone-/Backend-Server und ohne Google Cloud / Gemini-Dienste, kompatibel mit Node.js 18.x bis 22.x.
+Enhance the LCV code visualizer with persistent 2D/3D navigation switching, dedicated return node visualization for functions, verified function call edge rendering, and an automated Windows batch test script for production use.
 
-Working directory: .
+Working directory: c:\Users\jerem\Documents\Projekte\LCV
 Integrity mode: development
 
 ## Requirements
 
-### R1. Entfernung von Google Cloud SDK und Gemini-Verbindungen
-Entferne alle Abhängigkeiten, Skripte, CLI-Anbindungen (Google Cloud SDK / gcloud CLI) und API-Verbindungen zu Google Cloud und Gemini aus dem Projekt. Das Projekt darf keine Google Cloud-Dienste mehr voraussetzen oder ansprechen.
+### R1. Persistent 2D/3D View Navigation
+Provide a direct 2D/3D switch button that remains visible and accessible across both 3D visualization modes (Code City, 3D Force Graph, and Virtual Code) and the 2D Nodes graph. Clicking the button must toggle directly between the 2D Nodes graph and the most recently active 3D visualization view so the user can quickly switch back and forth between corresponding representations.
 
-### R2. Statische Lauffähigkeit auf GitHub ohne Backend-Server
-Passe das Projekt so an, dass die Website als rein statische HTML5-Anwendung auf GitHub (z. B. GitHub Pages) ohne Backend-Server betrieben werden kann. Bisherige Backend-Aufrufe und serverseitige Logik müssen so umgestellt oder entfernt werden, dass die Webanwendung im Browser autark funktioniert.
+### R2. Dedicated Return Node Visualization in 2D Nodes
+When visualizing functions in the 2D Nodes graph, every return statement—whether located inside conditional branches (`if`/`else`) or at the end of a function—must be rendered as a dedicated, specialized node rather than a standard code node. The return node must feature pink/rose header styling or accents, display "return" as its label/title, provide an input pin displaying the returned value/expression (and line), and omit any output pins.
 
-### R3. Node.js-Kompatibilität (18.x bis 22.x)
-Mache den Projekt-Code, die Abhängigkeiten und die Build-Skripte kompatibel mit den Node.js-Versionen 18.x, 19.x, 20.x, 21.x und 22.x, sodass Installation und Build in allen diesen Versionen fehlerfrei ausgeführt werden können.
+### R3. Function Call Edge Visualization in 2D Nodes
+Verify and ensure that every function call made within visualized code is detected and rendered as an edge/connection between caller nodes and callee function nodes in the 2D Nodes graph view.
+
+### R4. Automated Local Testing Batch Script
+Provide a Windows batch script (`start_local.bat` in the repository root) that automatically installs all required workspace dependencies via `npm install` and starts the local Vite development server (`npm run dev`) so the website can be tested immediately in a browser.
 
 ## Acceptance Criteria
 
-### Statische Website und Backend-Unabhängigkeit
-- [ ] Das Projekt lässt sich ohne aktiven Node.js/Backbone-Server als reines statisches HTML5/CSS/JavaScript-Bundle bauen.
-- [ ] Es verbleiben keine Google Cloud SDK, gcloud CLI oder Gemini API-Aufrufe und Abhängigkeiten im Projekt.
-- [ ] Die gebaute Anwendung läuft in einem Standard-Webbrowser vollständig ohne Server-Fehler oder Verbindungsabbrüche zu fehlenden Backend-Diensten.
+### Navigation
+- [ ] A 2D/3D toggle button is displayed in 3D views (Code City, 3D Force Graph, Virtual Code) and in the 2D Nodes graph.
+- [ ] Clicking the 2D/3D toggle button in any 3D view switches directly to the 2D Nodes graph view.
+- [ ] Clicking the 2D/3D toggle button from the 2D Nodes graph view returns directly to the previously active 3D view.
 
-### Node.js-Kompatibilität
-- [ ] `npm install` und `npm run build` laufen unter Node.js 18.x, 19.x, 20.x, 21.x und 22.x erfolgreich und ohne Inkompatibilitätsfehler durch.
+### Return Node Visualization
+- [ ] In the 2D Nodes graph, functions with return statements display a dedicated return node for each return statement (including returns inside `if`, `else`, and at the end of the function).
+- [ ] Each return node has visible pink/rose styling/accenting distinct from standard nodes.
+- [ ] Each return node displays "return" as its header/title.
+- [ ] Each return node possesses an input pin displaying the returned expression/value and line information.
+- [ ] Return nodes have no output pin.
 
-### Verifikation
-- [ ] Automatisierte Ausführung des Build-Prozesses und Prüfung des erzeugten statischen Ausgabeverzeichnisses auf Funktionsfähigkeit und Abwesenheit von Backend-Abhängigkeiten.
+### Function Call Edges
+- [ ] In the 2D Nodes graph, directed edges are rendered representing function calls from caller nodes to the corresponding callee function nodes across parsed code.
 
-## Follow-up — 2026-10-28T17:39:16Z
+### Local Testing Script
+- [ ] A `.bat` file exists in the repository root that executes dependency installation (`npm install`) across the workspace.
+- [ ] The `.bat` file automatically launches the local Vite development server upon completion of dependency installation.
+- [ ] Running the script provides the local URL (e.g. `http://localhost:5173`) where the application runs without build or runtime errors.
 
-ich kann die seite nicht aufrufen, vermutlich weil index.html in einem subordner ist. Kannst du das reparieren?
-
-Building hat geklappt
-
-Github sagt
-Antigravity IDE Version: 2.6.0
-VSCode OSS Version: 1.107.0 (user setup)
-Commit: 9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd
-Date: 2026-10-26T18:06:23.613Z
-Electron: 39.2.3
-Chromium: 142.0.7444.175
-Node.js: 22.21.1
-V8: 14.2.231.21-electron.0
-OS: Windows_NT x64 10.0.26300
-Language Server CL: 1007378935
-
+## Verification Resources
+- Use the built-in default repositories and sample code in LCV (e.g. `DEFAULT_REPOSITORY` in `frontend/constants.ts`) to verify 2D/3D switching, return node rendering, and function call edges.

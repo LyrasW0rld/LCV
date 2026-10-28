@@ -10,6 +10,7 @@ import {
   Render3DStyle,
   SavedSessionState,
   VisualizerMode,
+  get3DStyleLabel,
 } from './types';
 import { DEFAULT_PROJECT_URL, DEFAULT_REPOSITORY } from './constants';
 import {
@@ -483,17 +484,21 @@ export function App() {
             type="button"
             onClick={toggle2D3D}
             className="px-3 py-1.5 rounded bg-[#231B0E] hover:bg-[#2F2412] border border-[#E5A93C]/70 text-[#F7D794] font-sans text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
-            title="Switch between 2D Electronic Graph (?V=2D) and 3D Views (?Code-City, ?3DForce-Graph, ?Virtual-Code-3D)"
+            title={
+              mode === VisualizerMode.MODE_2D
+                ? `Switch directly to 3D View (${get3DStyleLabel(render3DStyle)})`
+                : 'Switch directly to 2D Nodes Graph'
+            }
           >
             {mode === VisualizerMode.MODE_2D ? (
               <>
                 <Box className="w-3.5 h-3.5 text-[#E5A93C]" />
-                <span>Switch 2D / 3D ({mode})</span>
+                <span>Switch to 3D ({get3DStyleLabel(render3DStyle)})</span>
               </>
             ) : (
               <>
                 <Layers className="w-3.5 h-3.5 text-[#E5A93C]" />
-                <span>Switch 2D / 3D ({mode})</span>
+                <span>Switch to 2D Nodes</span>
               </>
             )}
           </button>
@@ -678,6 +683,8 @@ export function App() {
               nodeOffsets={nodeOffsets}
               nodeCustomizations={nodeCustomizations}
               commentBoxes={commentBoxes}
+              onToggle2D3D={toggle2D3D}
+              active3DStyle={render3DStyle}
               onChangePanZoom={handleChangePanZoom}
               onChangeNodeOffsets={handleChangeNodeOffsets}
               onChangeNodeCustomizations={handleChangeNodeCustomizations}
@@ -701,6 +708,7 @@ export function App() {
               graphFocusMode={graphFocusMode}
               render3DStyle={render3DStyle}
               onChangeRender3DStyle={handleChangeRender3DStyle}
+              onToggle2D3D={toggle2D3D}
               selectedNode={selectedNode}
               hoveredNode={hoveredNode}
               filterFileId={filterFileId}

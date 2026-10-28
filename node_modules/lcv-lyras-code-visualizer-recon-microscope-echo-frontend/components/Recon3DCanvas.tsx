@@ -25,6 +25,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  Layers,
 } from 'lucide-react';
 
 interface Recon3DCanvasProps {
@@ -32,6 +33,7 @@ interface Recon3DCanvasProps {
   graphFocusMode: GraphFocusMode;
   render3DStyle: Render3DStyle;
   onChangeRender3DStyle: (style: Render3DStyle) => void;
+  onToggle2D3D?: () => void;
   selectedNode: CodeNode | null;
   hoveredNode: CodeNode | null;
   filterFileId: string | null;
@@ -174,6 +176,7 @@ export const Recon3DCanvas: React.FC<Recon3DCanvasProps> = ({
   graphFocusMode,
   render3DStyle,
   onChangeRender3DStyle,
+  onToggle2D3D,
   filterFileId,
   onSelectNode,
   onHoverNode,
@@ -1565,8 +1568,23 @@ export const Recon3DCanvas: React.FC<Recon3DCanvasProps> = ({
     <div className="relative w-full h-full bg-[#070709] overflow-hidden">
       <div ref={mountRef} className="w-full h-full" />
 
-      {/* Top-Left 3D Mode Switcher: Code City 3D | 3D Force-Graph | Virtual Code 3D */}
+      {/* Top-Left 3D Mode Switcher: 2D Nodes Toggle | Code City 3D | 3D Force-Graph | Virtual Code 3D */}
       <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-2 bg-[#0D0D12]/95 border border-zinc-800 p-1.5 rounded text-xs font-sans shadow-xl">
+        {onToggle2D3D && (
+          <>
+            <button
+              type="button"
+              onClick={onToggle2D3D}
+              className="px-3 py-1 rounded flex items-center gap-1.5 font-semibold transition bg-[#231B0E] hover:bg-[#2F2412] text-[#F7D794] border border-[#E5A93C]/80 shadow-xs"
+              title="Switch directly to 2D Nodes Graph"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#E5A93C]" />
+              <span>Switch to 2D Nodes</span>
+            </button>
+            <div className="w-[1px] h-4 bg-zinc-700/80 my-auto" />
+          </>
+        )}
+
         <button
           type="button"
           onClick={() => onChangeRender3DStyle(Render3DStyle.CODE_CITY)}

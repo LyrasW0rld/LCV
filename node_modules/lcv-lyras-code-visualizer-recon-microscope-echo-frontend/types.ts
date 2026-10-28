@@ -14,13 +14,27 @@ export enum Render3DStyle {
   FORCE_GRAPH = 'FORCE_GRAPH',
 }
 
+export function get3DStyleLabel(style?: Render3DStyle): string {
+  switch (style) {
+    case Render3DStyle.CODE_CITY:
+      return 'Code City 3D';
+    case Render3DStyle.FORCE_GRAPH:
+      return '3D Force-Graph';
+    case Render3DStyle.VIRTUAL_CODE:
+      return 'Virtual Code 3D';
+    default:
+      return 'Code City 3D';
+  }
+}
+
 export enum NodeKind {
   CLASS = 'CLASS',
   FUNCTION = 'FUNCTION',
   CONDITION = 'CONDITION',
   LOOP = 'LOOP',
   STATEMENT = 'STATEMENT',
-  RECURSION = 'RECURSION'
+  RECURSION = 'RECURSION',
+  RETURN = 'RETURN'
 }
 
 export type SupportedLanguage = 'C' | 'C++' | 'Java' | 'Python' | 'Rust' | 'C#' | 'JavaScript' | 'Unknown';
@@ -46,6 +60,7 @@ export interface CodeNode {
   complexity: number;
   memoryBytes: number;
   color: string;
+  returnExpression?: string;
   x?: number;
   y?: number;
   z?: number;

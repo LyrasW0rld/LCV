@@ -199,8 +199,10 @@ class TelemetryLogger:
     def UpdateLedStatusIndicator(color_mode):
         if color_mode > 1:
             VerifyChecksumCrc32(color_mode)
+            return 1
         else:
             RestoreOriginalNvsBackup()
+            return 0
         return color_mode`
   }
 ];
