@@ -1,0 +1,4 @@
+{
+  "name": "LCV - Lyras Code Visualizer (Recon, Microscope & Echo)",
+  "description": "Interactive 2D/3D source code architecture, AST, and diff visualizer supporting C, C++, Java, Python, Rust, C#, JavaScript, and 7Z/ZIP/RAR archive uploads."
+}

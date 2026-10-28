@@ -1,0 +1,16 @@
+{
+  "name": "lcv-lyras-code-visualizer-recon-microscope-echo",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0 <=22.x"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "preview": "npm run preview --prefix frontend",
+    "test": "node scripts/verify-build.js"
+  }
+}

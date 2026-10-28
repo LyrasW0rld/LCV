@@ -1,0 +1,31 @@
+# LCV (Lyras Code Visualizer) - Open Access Policy
+# All web crawlers, search engines, and AI training models are explicitly permitted.
+
+User-agent: *
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://lyrasw0rld.github.io/Lyras-Code-Visualizer/sitemap.xml
