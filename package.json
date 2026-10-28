@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
+    "postbuild": "node scripts/postbuild.js",
     "preview": "npm run preview --prefix frontend",
     "test": "node scripts/verify-build.js"
   }

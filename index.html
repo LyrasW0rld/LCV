@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LCV | Lyras Code Visualizer</title>
+  <meta http-equiv="refresh" content="0; url=./dist/">
+  <script>
+    // Immediate client-side redirection preserving query parameters and hash fragments
+    window.location.replace('./dist/' + window.location.search + window.location.hash);
+  </script>
+  <style>
+    body {
+      background-color: #070709;
+      color: #E4E4E7;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 1.5rem;
+      box-sizing: border-box;
+    }
+    .trampoline-card {
+      text-align: center;
+      background: rgba(24, 24, 27, 0.85);
+      border: 1px solid rgba(229, 169, 60, 0.25);
+      border-radius: 0.75rem;
+      padding: 2.5rem 2rem;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .brand-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: #F4F4F5;
+      margin: 0 0 0.5rem 0;
+    }
+    .brand-highlight {
+      color: #E5A93C;
+    }
+    .redirect-desc {
+      color: #A1A1AA;
+      font-size: 0.95rem;
+      margin: 0 0 1.5rem 0;
+      line-height: 1.5;
+    }
+    .fallback-btn {
+      display: inline-block;
+      background: #E5A93C;
+      color: #070709;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      transition: background-color 0.15s ease-in-out;
+    }
+    .fallback-btn:hover {
+      background: #F59E0B;
+    }
+  </style>
+</head>
+<body>
+  <div class="trampoline-card">
+    <h1 class="brand-title"><span class="brand-highlight">LCV</span> &bull; Lyra's Code Visualizer</h1>
+    <p class="redirect-desc">Redirecting to the application...</p>
+    <p><a class="fallback-btn" href="./dist/">Click here if not redirected automatically</a></p>
+  </div>
+</body>
+</html>

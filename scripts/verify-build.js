@@ -9,8 +9,8 @@
  * 3. Relative asset paths in dist/index.html (GitHub Pages subpath compatibility).
  * 4. Zero Google Cloud, Gemini, Vertex AI, or backend proxy leaks in dist/.
  * 5. Zero localhost or external backend server calls.
- * 6. Presence of static hosting metadata (.nojekyll, robots.txt).
- * 7. Node runtime environment verification.
+ * 6. Presence of static hosting metadata (dist/.nojekyll, dist/robots.txt, dist/404.html).
+ * 7. Root trampoline index.html, root .nojekyll, and .github/workflows/deploy.yml configuration.
  * 
  * Exits with 0 on success, 1 on failure.
  */
@@ -22,6 +22,12 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.resolve(ROOT_DIR, 'dist');
 const ASSETS_DIR = path.resolve(DIST_DIR, 'assets');
 const INDEX_HTML = path.resolve(DIST_DIR, 'index.html');
+const DIST_404 = path.resolve(DIST_DIR, '404.html');
+const ROOT_INDEX_HTML = path.resolve(ROOT_DIR, 'index.html');
+const ROOT_NOJEKYLL = path.resolve(ROOT_DIR, '.nojekyll');
+const DEPLOY_WORKFLOW = path.resolve(ROOT_DIR, '.github', 'workflows', 'deploy.yml');
+const ROOT_DEPLOY_YML = path.resolve(ROOT_DIR, 'deploy.yml');
+const STATIC_WORKFLOW = path.resolve(ROOT_DIR, '.github', 'workflows', 'static.yml');
 
 let passedChecks = 0;
 let failedChecks = 0;
@@ -194,6 +200,107 @@ if (fs.existsSync(robotsPath)) {
   pass('dist/robots.txt exists');
 } else {
   fail('dist/robots.txt file', 'Missing robots.txt in dist/ root.');
+}
+
+if (fs.existsSync(DIST_404)) {
+  const content404 = fs.readFileSync(DIST_404, 'utf-8');
+  if (content404.length > 100 && /<div[^>]+id=["']root["']/i.test(content404)) {
+    pass('dist/404.html exists and contains SPA root container', `${content404.length} bytes`);
+  } else {
+    fail('dist/404.html integrity', 'dist/404.html is too small or missing #root mounting container.');
+  }
+} else {
+  fail('dist/404.html file', 'Missing 404.html in dist/ root.');
+}
+
+// Check 7: Root entry trampoline & GitHub Pages deployment configuration
+console.log('\n--> Step 7: Checking root trampoline & GitHub Actions deployment configuration');
+if (fs.existsSync(ROOT_INDEX_HTML)) {
+  const rootIndexContent = fs.readFileSync(ROOT_INDEX_HTML, 'utf-8');
+  if (rootIndexContent.length > 50) {
+    pass('Root index.html exists and is non-empty', `${rootIndexContent.length} bytes`);
+  } else {
+    fail('Root index.html size', 'Root index.html is unexpectedly small.');
+  }
+
+  // Check meta refresh redirection to ./dist/
+  if (/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=\.\/dist\/?["']/i.test(rootIndexContent)) {
+    pass('Root index.html contains meta refresh redirection to ./dist/');
+  } else {
+    fail('Root index.html meta refresh', 'Missing <meta http-equiv="refresh" content="0; url=./dist/"> in root index.html.');
+  }
+
+  // Check JS redirection preserving search and hash params
+  const hasJsRedirect = rootIndexContent.includes('window.location.replace') &&
+    rootIndexContent.includes('./dist/') &&
+    rootIndexContent.includes('window.location.search') &&
+    rootIndexContent.includes('window.location.hash');
+  if (hasJsRedirect) {
+    pass('Root index.html JS redirection preserves search and hash parameters');
+  } else {
+    fail('Root index.html JS redirection', 'Missing window.location.replace to ./dist/ preserving search and hash parameters.');
+  }
+
+  // Check fallback link
+  if (/<a[^>]+href=["']\.\/dist\/?["']/i.test(rootIndexContent)) {
+    pass('Root index.html contains fallback link to ./dist/');
+  } else {
+    fail('Root index.html fallback link', 'Missing fallback link <a href="./dist/"> in root index.html.');
+  }
+} else {
+  fail('Root index.html file', `Target file ${ROOT_INDEX_HTML} not found.`);
+}
+
+// Check root .nojekyll
+if (fs.existsSync(ROOT_NOJEKYLL)) {
+  pass('Root .nojekyll exists (disables Jekyll for root branch deployments)');
+} else {
+  fail('Root .nojekyll file', `Target file ${ROOT_NOJEKYLL} not found.`);
+}
+
+// Check .github/workflows/deploy.yml
+if (fs.existsSync(DEPLOY_WORKFLOW)) {
+  pass('.github/workflows/deploy.yml exists');
+  const deployYaml = fs.readFileSync(DEPLOY_WORKFLOW, 'utf-8');
+
+  // Verify path: ./dist for upload-pages-artifact
+  if (/path:\s*['"]?\.\/dist['"]?/i.test(deployYaml)) {
+    pass('deploy.yml configures upload-pages-artifact with path: ./dist');
+  } else {
+    fail('deploy.yml artifact path', 'Missing path: ./dist in deploy.yml.');
+  }
+
+  // Verify node-version matrix includes 18.x to 22.x
+  const nodeVersions = ['18.x', '19.x', '20.x', '21.x', '22.x'];
+  const allNodesPresent = nodeVersions.every(v => deployYaml.includes(v));
+  if (allNodesPresent) {
+    pass('deploy.yml includes Node matrix [18.x, 19.x, 20.x, 21.x, 22.x]');
+  } else {
+    fail('deploy.yml node matrix', 'Missing one or more required Node versions (18.x to 22.x).');
+  }
+
+  // Verify install, build, and test steps
+  if (deployYaml.includes('npm install') && deployYaml.includes('npm run build') && deployYaml.includes('npm test')) {
+    pass('deploy.yml executes npm install, npm run build, and npm test');
+  } else {
+    fail('deploy.yml build steps', 'Missing npm install, npm run build, or npm test in deploy.yml.');
+  }
+} else {
+  fail('.github/workflows/deploy.yml', `Target file ${DEPLOY_WORKFLOW} not found.`);
+}
+
+// Check no misplaced root deploy.yml
+if (!fs.existsSync(ROOT_DEPLOY_YML)) {
+  pass('Zero misplaced deploy.yml at repository root');
+} else {
+  fail('Misplaced deploy.yml', 'Found root deploy.yml. Workflows must only reside in .github/workflows/.');
+}
+
+// Check no obsolete .github/workflows/static.yml
+if (!fs.existsSync(STATIC_WORKFLOW)) {
+  pass('Zero obsolete .github/workflows/static.yml present');
+} else {
+  fail('Obsolete static.yml', 'Found obsolete .github/workflows/static.yml.');
 }
 
 // Summary
